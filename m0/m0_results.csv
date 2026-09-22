@@ -1,0 +1,2 @@
+dataset,index,shape_id,mse,psnr,prims,steps,time_s,pct_matches,pct_perfect
+OneComp,66,303016,9.644073191948654e-15,120.0,8,750,490.10709285736084,1.0,1.0

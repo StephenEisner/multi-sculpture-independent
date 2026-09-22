@@ -83,6 +83,7 @@ def run_one(d4d: Path, name: str, idx: int, threads: int, batch_param_count: int
     env = {**os.environ, "OMP_NUM_THREADS": str(threads), "MKL_NUM_THREADS": str(threads)}
     with open(log, "w") as f:
         rc = subprocess.run(cmd, cwd=d4d, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+    # optimize_shc.py saves all results before writing video.mp4; without ffmpeg only that last step fails.
     print(f"[{name} {idx}] exit {rc}", flush=True)
     return name, idx, rc
 
@@ -115,15 +116,19 @@ print(json.dumps(rows))
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
         w.writerows(rows)
-    print(f"{'dataset':9s} {'n':>3s} {'PSNR':>6s} {'paper':>6s} {'#prim':>6s} {'paper':>6s} {'time_s':>7s} {'paper':>6s}")
+    # PSNR of the dataset-mean MSE (exact fits give MSE ~1e-14, so a mean of per-shape PSNRs is meaningless);
+    # also the median per-shape PSNR capped at 60 dB, and d4descent's own primitive-recovery metric.
+    hdr = f"{'dataset':9s} {'n':>3s} {'PSNR(meanMSE)':>13s} {'paper':>6s} {'medPSNR<=60':>11s} {'#prim':>6s} {'paper':>6s} {'match%':>7s} {'time_s':>7s} {'paper':>6s}"
+    print(hdr)
     for ds in DATASETS:
         rs = [r for r in rows if r["dataset"] == ds]
         if not rs:
             continue
         mean = lambda k: sum(r[k] for r in rs) / len(rs)
+        med = sorted(min(r["psnr"], 60.0) for r in rs)[len(rs) // 2]
         p = PAPER[ds]
-        print(f"{ds:9s} {len(rs):3d} {mean('psnr'):6.1f} {p['psnr']:6.1f} {mean('prims'):6.1f} {p['prims']:6d} "
-              f"{mean('time_s'):7.0f} {p['time_s']:6d}")
+        print(f"{ds:9s} {len(rs):3d} {10 * math.log10(1 / mean('mse')):13.1f} {p['psnr']:6.1f} {med:11.1f} "
+              f"{mean('prims'):6.1f} {p['prims']:6d} {100 * mean('pct_matches'):7.0f} {mean('time_s'):7.0f} {p['time_s']:6d}")
 
 
 def main():
