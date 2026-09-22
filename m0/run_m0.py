@@ -102,7 +102,9 @@ for mp in sorted(root.glob('*/*/*/metrics.pt')):
     mse = m['$loss_cont'][-1]
     res = torch.load(mp.parent / 'results.bsr', weights_only=False)
     summ = res[2].summarize(0.8)
+    mse_best = min(m['$loss_cont'])
     rows.append(dict(dataset=ds, index=int(idx), shape_id=sid, mse=mse, psnr=10*math.log10(1/max(mse,1e-12)),
+                     mse_best=mse_best,
                      prims=len(top.primitives), steps=len(m['$loss_cont']), time_s=m['$timestamp'][-1],
                      pct_matches=summ.pct_matches, pct_perfect=summ.pct_perfect_matches))
 print(json.dumps(rows))
@@ -118,7 +120,8 @@ print(json.dumps(rows))
         w.writerows(rows)
     # PSNR of the dataset-mean MSE (exact fits give MSE ~1e-14, so a mean of per-shape PSNRs is meaningless);
     # also the median per-shape PSNR capped at 60 dB, and d4descent's own primitive-recovery metric.
-    hdr = f"{'dataset':9s} {'n':>3s} {'PSNR(meanMSE)':>13s} {'paper':>6s} {'medPSNR<=60':>11s} {'#prim':>6s} {'paper':>6s} {'match%':>7s} {'time_s':>7s} {'paper':>6s}"
+    # d4descent's optimize() returns the *final* state, not the best; "best" is min over the trajectory.
+    hdr = f"{'dataset':9s} {'n':>3s} {'PSNR(meanMSE)':>13s} {'best':>5s} {'paper':>6s} {'medPSNR<=60':>11s} {'#prim':>6s} {'paper':>6s} {'match%':>7s} {'time_s':>7s} {'paper':>6s}"
     print(hdr)
     for ds in DATASETS:
         rs = [r for r in rows if r["dataset"] == ds]
@@ -127,7 +130,7 @@ print(json.dumps(rows))
         mean = lambda k: sum(r[k] for r in rs) / len(rs)
         med = sorted(min(r["psnr"], 60.0) for r in rs)[len(rs) // 2]
         p = PAPER[ds]
-        print(f"{ds:9s} {len(rs):3d} {10 * math.log10(1 / mean('mse')):13.1f} {p['psnr']:6.1f} {med:11.1f} "
+        print(f"{ds:9s} {len(rs):3d} {10 * math.log10(1 / mean('mse')):13.1f} {10 * math.log10(1 / mean('mse_best')):5.1f} {p['psnr']:6.1f} {med:11.1f} "
               f"{mean('prims'):6.1f} {p['prims']:6d} {100 * mean('pct_matches'):7.0f} {mean('time_s'):7.0f} {p['time_s']:6d}")
 
 
