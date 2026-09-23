@@ -266,3 +266,62 @@ r264 2364s L=0.02559 cov=[0.0132, 0.0106] ov=[0.0, 8e-05] P=5 S=44 arc=1.00 lr=0
 r265 2374s L=0.02551 cov=[0.0132, 0.0106] ov=[0.0, 7e-05] P=5 S=44 arc=1.00 lr=0.0064 w_ov=9.34 iou=[0.906, 0.928] acc=0
 r266 2382s L=0.02544 cov=[0.0132, 0.0106] ov=[0.0, 6e-05] P=5 S=44 arc=1.00 lr=0.0032 w_ov=9.51 iou=[0.906, 0.927] acc=0
 r267 2391s L=0.02542 cov=[0.0133, 0.0106] ov=[0.0, 6e-05] P=5 S=44 arc=1.00 lr=0.0016 w_ov=9.66 iou=[0.906, 0.927] acc=0
+r268 2399s L=0.02541 cov=[0.0133, 0.0106] ov=[0.0, 5e-05] P=5 S=44 arc=1.00 lr=0.0004 w_ov=9.82 iou=[0.906, 0.928] acc=0
+r269 2408s L=0.0254 cov=[0.0133, 0.0106] ov=[0.0, 5e-05] P=5 S=44 arc=1.00 lr=0.0002 w_ov=9.99 iou=[0.906, 0.928] acc=0
+{
+ "SwapPoses": {
+  "proposed": 1994,
+  "accepted": 0,
+  "scope": "per-target",
+  "rate": 0.0
+ },
+ "Flip": {
+  "proposed": 1098,
+  "accepted": 2,
+  "scope": "per-target",
+  "rate": 0.0018214936247723133
+ },
+ "Merge": {
+  "proposed": 1504,
+  "accepted": 41,
+  "scope": "shared",
+  "rate": 0.02726063829787234
+ },
+ "ToArc": {
+  "proposed": 319,
+  "accepted": 126,
+  "scope": "shared",
+  "rate": 0.3949843260188088
+ },
+ "Rotate": {
+  "proposed": 2658,
+  "accepted": 2,
+  "scope": "per-target",
+  "rate": 0.0007524454477050414
+ },
+ "Split": {
+  "proposed": 5544,
+  "accepted": 42,
+  "scope": "shared",
+  "rate": 0.007575757575757576
+ },
+ "forced:RemoveSmallPart": {
+  "proposed": 0,
+  "accepted": 3,
+  "scope": "shared",
+  "rate": 3.0
+ },
+ "ToLine": {
+  "proposed": 4152,
+  "accepted": 81,
+  "scope": "shared",
+  "rate": 0.019508670520231215
+ },
+ "MergeClose": {
+  "proposed": 11,
+  "accepted": 0,
+  "scope": "shared",
+  "rate": 0.0
+ }
+}
+EVAL avg_chamfer=4.676 avg_hausdorff=23.913 pieces=5->5 loss=0.025402

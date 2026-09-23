@@ -10,3 +10,4 @@ Stand-in inputs (Material Design Icons silhouettes), NOT comparable to Voronoi S
 | cat-bear | 6 | no | 6.95 | 32.36 | 2.81 | 8.92 | 787 | 379 | 69 | 6.6 | 6 | 1 |
 | caterpillar-butterfly | 6 | no | 9.59 | 38.09 | 4.61 | 13.71 | 837 | 376 | 223 | 8.7 | 6 | 3 |
 | dog-bone | 4 | yes | 7.11 | 29.05 | 2.54 | 8.89 | 1417 | 1958 | 33 | 30.1 | 4 | 3 |
+| dog-bone | 5 | yes | 5.02 | 25.51 | 3.85 | 13.69 | 1213 | 557 | 162 | 7.6 | 5 | 0 |
