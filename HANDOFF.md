@@ -10,7 +10,9 @@ The spec is in `TASK.md`. Assumptions and deviations are in `DEVIATIONS.md`.
 | M1 Multi-arrangement wrapper | **Done.** `srd_dissect/`, v0 rewrites with scopes and locks, 32 unit tests passing (`uv run pytest`). Integration smoke runs in `runs/m1_smoke/`. |
 | M2 Harness | **Done.** `eval/`: Voronoi Scissors 6.1 protocol, validity checker, isometric overlap clean-up. 9 synthetic tests with known answers (`tests/test_m2.py`). |
 | M3 Sanity dissection | **Done, negative result.** SRD does not recover Dudeney's exact dissection: best of 28 restarts reaches Chamfer 6.5 / Hausdorff ~25 px. See below. |
-| M4–M6 | Running overnight on stand-in inputs (`scripts/run_benchmarks.sh`). |
+| M4 Dog–Bone k=4 | **Done on stand-in inputs** (not comparable): Chamfer 3.96 / Hausdorff 24.1 vs VS 2.54 / 8.89 on the real inputs. |
+| M5 Full table | Running overnight (`scripts/run_benchmarks.sh`); `results/table1.csv`, `results/table1.md`. |
+| M6 Dog ↔ duck | **Done on stand-in inputs**, k = 6, flips on: IoU 0.886 (dog) / 0.922 (duck). |
 
 ## Setup
 
@@ -131,6 +133,29 @@ The targets are fitted to the window at a common area. Every configuration was r
 1. The adaptive step-size multiplier decays to its floor (2e-4) by the last third of a run. The pieces are then effectively frozen while w_ov is still rising.
 2. Fixed-k disables CutPart, so the piece *topology* is whatever the random initial chords gave. The optimizer can only bend those pieces, and Dudeney needs specific cut lines.
 3. The spread across restarts (Chamfer 6.5–10.4) is larger than the differences between configs. Selecting the restart by final loss does not always pick the lowest-Chamfer restart; the protocol says to select by L2, so I follow it.
+
+## Benchmark setup (M4–M6)
+
+- **Inputs:** stand-in silhouettes from Material Design Icons (`srd_dissect/shapes_mdi.py`, vendored under `data/mdi/`). **Not comparable to Voronoi Scissors Table 1.** Both targets are fitted to the render window at a common area (`targets.fit_pair`).
+- **One configuration for every pair**, chosen on square ↔ triangle only: partition init, fixed-k, SGD+AdaptiveLR, w_ov 0.1 → 10, 64 proposals every 25 steps, per-kind local steps (CutPart/Swap 5, pose moves/AddPart 3, rest 1), 128² render.
+- **Budget:** 4 restarts in parallel, one per core, **40 min each, for every k.** Voronoi Scissors used 1/4/6 h for k = 4/5/6 on 56 cores, which is not reproducible here. The kept restart is chosen by final objective, as the protocol says ("smallest average L2").
+- **Hardware:** 4-core cloud container, no GPU, 1 thread per restart.
+- `scripts/run_benchmarks.sh` runs everything, `srd_dissect/bench.py` drives the restarts, and `scripts/make_table1.py` writes `results/table1.csv`/`.md`.
+
+## M4: Dog–Bone, k = 4 (stand-in inputs)
+
+The kept restart (seed 2) scores avg Chamfer **3.96**, avg Hausdorff **24.1**. Per-restart Chamfer: 8.91 / 8.79 / 3.96 / 5.98. The arrangements are recognizable, and the dog's head piece is reused as a bone knob (`runs/bench/dog-bone_k4/seed2/best.png`). Residuals after clean-up (A+B): uncovered 1,259 px², overhang 772 px², internal gaps 39 px²; raw overlap 6 px². The large Hausdorff comes from under-filled extremities (thin legs, the bone's round knobs). With these inputs and this budget it does not beat Voronoi Scissors' 2.54 / 8.89, which were measured on different inputs anyway.
+
+## M6: Dog ↔ Duck, k = 6, flips on (stand-in inputs)
+
+Report: `runs/bench/dog-duck_k6_flip/m6_report.json`. Figure with the regions: `m6_regions.png`. Kept restart: seed 2.
+
+| | IoU | Region IoU | Chamfer | Hausdorff | Uncovered px² | Overhang px² | Internal gap px² | Overlap px² raw → clean |
+|---|---|---|---|---|---|---|---|---|
+| dog | 0.886 | legs 0.884, ears/head 0.854 | 6.86 | 23.7 | 790 | 391 | 82 | 1.4 → 0 |
+| duck | 0.922 | bill 0.892, tail 0.846 | 7.85 | 31.8 | 598 | 199 | 218 | 4.7 → 0 |
+
+6 pieces, one pose flipped. Parts are reused across the forms: the dog's ear/head piece becomes the duck's bill, the dog's back foot becomes the duck's tail, and one large piece is the dog's belly and legs and the duck's body. The disagreement regions score 3–5 IoU points below the whole-shape IoU, as expected: each is a piece that has to serve two different outlines.
 
 ## Findings from reading d4descent (inputs to M1)
 
