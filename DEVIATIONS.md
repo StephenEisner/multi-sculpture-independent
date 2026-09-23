@@ -36,3 +36,15 @@ Anything assumed or changed relative to `TASK.md` is logged here.
 - **Best state.** The loop tracks and returns the best state under the *final* objective (w_ov = w_ov_end). This follows the M0 finding that d4descent returns the last state.
 - **Not yet implemented** (post-v0 per the spec): FusePart, TrimOverlap. Relocate is implemented but off (family weight 0).
 - **Units.** The world window is [−1.5, 1.5]², rendered at 128². Built-in targets are normalized to area 1.5 world units² (≈ 2,700 render px). The M2 evaluation will rescale to 10,000 px².
+
+## M2: evaluation protocol and validity
+
+- **"Sample 100 points on each shape"** is read as on the *boundary*: 100 points evenly spaced by arc length over *all* boundary rings, so internal gaps in an arrangement add boundary and are penalized. Evenly spaced rather than random, to remove sampling variance. Because of that spacing, even identical boundaries score about ¼ of the sample spacing (~1 px on a 100×100 square). This floor applies equally to Voronoi Scissors' protocol.
+- **Chamfer** = mean of the two directed mean nearest-neighbour distances. **Hausdorff** = max of the two directed maxima. The paper does not state its convention.
+- **ICP** is point-to-point, translation only, from arrangement samples to target samples, initialized by aligning centroids.
+- **Arcs** are sampled at 64 points per primitive for all polygon operations (< 0.01 px deviation at the 10,000 px² scale). Pose transforms in evaluation are float64.
+- **Polygon clean-up (`eval/validity.py:remove_overlaps`).** Pieces are processed largest first. Each is trimmed *in its local frame* by every earlier piece mapped in from *every* arrangement. The piece stays one rigid shape, the result has zero overlap in every arrangement, and the removed material reappears as gaps, which are reported. If trimming disconnects a piece, only its largest component is kept. **Headline numbers are computed on the cleaned (valid) dissection**, with raw numbers alongside.
+
+## Benchmark inputs
+
+- **The Duncan et al. / Voronoi Scissors inputs are unavailable** (egress policy), and the Voronoi Scissors PDF link is blocked. The benchmark pairs are therefore run on **stand-in silhouettes from Material Design Icons** (Apache-2.0, fetched from the npm registry, vendored in `data/mdi/` with its LICENSE). Pairs: dog-side–bone, rabbit–egg, cat–teddy-bear, snake–apple, bug–butterfly (weak stand-in for caterpillar–butterfly), hat-fedora–ghost, and dog-side–duck for M6. Trump–Map has no stand-in and is skipped. Silhouettes are the filled outer outline (union of subpaths, holes filled, closing buffer for icons whose parts are separated by thin gaps), simplified to 18–98 line segments. **All numbers on these inputs are labelled "stand-in inputs, not comparable to Voronoi Scissors Table 1".**

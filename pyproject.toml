@@ -11,6 +11,8 @@ dependencies = [
     "shapely>=2.1",
     "matplotlib>=3.10.6",
     "pypdf>=6.0",
+    "svgpathtools>=1.6",
+    "scikit-image>=0.25",
 ]
 
 [dependency-groups]

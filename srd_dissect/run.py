@@ -30,6 +30,27 @@ def save_dissection(D, path):
                             "poses": [dataclasses.asdict(x) for x in p.poses]} for p in D.pieces]}, path)
 
 
+def load_dissection(path):
+    from d4descent.objects.arclines import Arc, Line, Shape
+
+    from .state import Dissection, Piece, Pose
+
+    d = torch.load(path, weights_only=False)
+    pieces = []
+    for pd in d["pieces"]:
+        pts: dict[tuple, torch.Tensor] = {}
+
+        def P(xy):
+            key = tuple(round(v, 7) for v in xy)
+            if key not in pts:
+                pts[key] = torch.tensor(xy, dtype=torch.float32)
+            return pts[key]
+
+        prims = [Arc(P(s), P(e), torch.tensor(k)) if kind == "Arc" else Line(P(s), P(e)) for kind, s, e, k in pd["prims"]]
+        pieces.append(Piece(pd["pid"], Shape(prims), [Pose(**x) for x in pd["poses"]]))
+    return Dissection(pieces, d["n_targets"], d["next_pid"])
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--pair", nargs=2, default=["square", "triangle"])
