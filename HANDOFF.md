@@ -7,17 +7,21 @@ The spec is in `TASK.md`. Assumptions and deviations are in `DEVIATIONS.md`.
 | Milestone | State |
 |---|---|
 | M0 Reproduce SRD | **Done** on a 14-shape subset (CPU). Reproduces the paper's range; see below. Per-shape rows in `m0/m0_results.csv`. |
-| M1–M6 | Not started (per "stop and report after each milestone"). |
+| M1 Multi-arrangement wrapper | **Done.** `srd_dissect/`, v0 rewrites with scopes and locks, 32 unit tests passing (`uv run pytest`). Integration smoke runs in `runs/m1_smoke/`. |
+| M2–M6 | Not started. |
 
 ## Setup
 
 ```bash
+uv sync                               # this repo's env; pulls d4descent@a66b729 from GitHub
+uv run pytest                         # M1 unit tests
+PYTHONPATH=. uv run python -m srd_dissect.run --pair square triangle --k 4 --init growth --rounds 40 --out runs/x
 scripts/setup_d4descent.sh            # clones d4descent@a66b729 to ../d4descent and runs uv sync
 python3 m0/run_m0.py run --jobs 4     # M0 subset (seed 0), then aggregates
 python3 m0/run_m0.py aggregate        # re-aggregate only
 ```
 
-d4descent core files are **not** modified. M0 calls its `scripts/optimize_shc.py` unchanged.
+d4descent core files are **not** modified. M0 calls its `scripts/optimize_shc.py` unchanged. `srd_dissect` imports d4descent's `Shape` grammar (Split/Merge/ToArc/ToLine, `resolve_intersections`, `canonicalize_loops`) and its rasterizer as-is.
 
 ## M0: reproduce d4descent Arc–Line fitting
 
@@ -46,6 +50,53 @@ PSNR = 10·log10(1 / mean MSE over the shapes). "Final" is the state `optimize()
 **Caveat: late divergence.** Two shapes (OneComp 122, Donut 6) reach a low loss (6.5e-6 and 3.6e-6), then diverge in the last few steps after a rewrite round, to 3e-3 and 1e-3. d4descent's `optimize()` returns the *final* state, not the best, so one such shape dominates the mean-MSE PSNR of its set. Whether the paper's numbers include such cases is unknown. **Consequence for M1:** track and return the best state; after a rewrite, keep the optimizer from taking a jolt from a stale step size.
 
 Runtime is 12–60× slower than the paper's GPU timings, which is expected on one CPU thread at 256² resolution with 64 proposals per round.
+
+## M1: multi-arrangement wrapper
+
+**Layout (`srd_dissect/`).**
+- `state.py`: `Pose(θ, tx, ty, flip)`, `Piece` (stable pid, d4descent `Shape` in the local frame, one pose per target), `Dissection`.
+- `render.py`: packs pieces into a d4descent `ShapeCollection`. It renders target t by transforming the control points (and negating k under a flip), then calling the unmodified rasterizer.
+- `loss.py`: coverage over the union (clamped sum of occupancies), overlap, fold-over, short segments, and simplicity g.
+- `rewrites.py`: all v0 kinds with scope and locks, `apply_rewrite` / `apply_many`, proposal sampling, repair.
+- `srd.py`: the loop, batched scoring against the same-pieces-stepped baseline, greedy apply under locks, best-state tracking, diagnostics.
+- `init.py`: partition and growth initializations.
+- `viz.py`, `run.py`: figures and runner (seed, config and hardware logged to `config.json`).
+- The v0 set is implemented: Split/Merge/MergeClose, ToArc/ToLine, CutPart, AddPart/RemoveSmallPart, Rotate, Flip (gated), SwapPoses, soft overlap penalty with annealed w_ov. Relocate is implemented but off. FusePart and TrimOverlap are not yet implemented.
+
+**Tests (`tests/test_m1.py`, 32 passing).**
+- Pose render equals the explicitly transformed shape, including flips.
+- Exact shared rewrites leave *both* targets' renders unchanged: Split, ToArc, Merge-after-Split, ToLine at k = 0, multiple grammar rewrites on one piece, CutPart, recentre, and repair, including splitting a multi-loop piece. The measured tolerances are in DEVIATIONS.
+- Every per-target rewrite (Rotate, Flip, SwapPoses, Relocate) leaves the other target's render *bit-identical* and the geometry untouched. Rotate and Flip keep the world centroid; Swap exchanges centroids.
+- The lock conflict matrix and greedy selection.
+- Gradient routing: poses get only their own target's gradient, and geometry gets exactly the sum.
+- A no-op rewrite scores exactly 0 against the baseline.
+
+**Integration smoke** (square ↔ triangle, 40 rounds, seed 0, free-k, 2 threads each, two runs in parallel, ~12 s/round):
+
+| init | best L | IoU sq / tri | overlap (mean relu) | pieces | arc fraction |
+|---|---|---|---|---|---|
+| partition (k=4) | 0.0115 | 0.956 / 0.957 | 9e-5 / 6e-5 | 13 | 0.83 |
+| growth (4 disks) | 0.0084 | 0.967 / 0.958 | 1e-5 / 1e-5 | 11 | 0.91 |
+
+Accept rates (proposed → accepted), growth run:
+
+| Rewrite | Scope | Proposed | Accepted | Rate |
+|---|---|---|---|---|
+| ToArc | shared | 57 | 28 | 0.49 |
+| ToLine | shared | 363 | 26 | 0.07 |
+| Merge | shared | 176 | 11 | 0.06 |
+| Split | shared | 607 | 13 | 0.02 |
+| AddPart | shared | 271 | 5 | 0.02 |
+| Rotate | per-target | 306 | 3 | 0.01 |
+| CutPart | shared | 450 | 3 | 0.01 |
+| RemoveSmallPart | shared | 76 | 1 | 0.01 |
+| SwapPoses | per-target | 254 | 0 | 0.00 |
+
+**What the diagnostics say (inputs to M3):**
+- **Cross-target gradient conflict is strongly negative.** The mean cosine is −0.44 (partition) and −0.62 (growth); 58% and 74% of piece-rounds are below −0.5. Yet **CutPart is accepted only 1% of the time.** CutPart is exact, so after one local step the two halves have barely moved apart and rarely beat the baseline. This is the same failure mode the prototype showed for SwapPoses. The fix to try first: score CutPart and SwapPoses with a few more local steps (the scorer already supports `local_steps`; it needs to be per-kind).
+- **Free-k overshoots.** The piece count grows to 11–13 for a k = 4 problem, and several leftovers are tiny AddPart disks. M3 needs the finish-at-k step (free-k) or fixed-k, plus a stronger or annealed `w_part`.
+- **Overlap annealing works.** The mean overlap goes from ~2e-2 to ~1e-5 as w_ov goes 0.1 → 10, at a cost of about 1–2% IoU. Gaps between pieces are visible in the figures; the M2 validity pass will quantify them.
+- **ToLine does not dominate here, unlike the prototype.** The arc fraction stays at 0.83–0.91.
 
 ## Findings from reading d4descent (inputs to M1)
 

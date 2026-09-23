@@ -1,0 +1,29 @@
+[project]
+name = "srd-dissect"
+version = "0.1.0"
+description = "Multi-arrangement dissection with Stochastic Rewrite Descent on the d4descent Arc-Line grammar"
+requires-python = ">=3.12"
+dependencies = [
+    "d4descent",
+    "torch>=2.8.0",
+    "numpy>=2.3.3",
+    "scipy>=1.16",
+    "shapely>=2.1",
+    "matplotlib>=3.10.6",
+    "pypdf>=6.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+d4descent = { git = "https://github.com/milmillin/d4descent", rev = "a66b729" }
+confify = { git = "https://github.com/milmillin/confify.git" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
