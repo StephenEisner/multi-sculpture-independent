@@ -43,6 +43,7 @@ class SRDConfig:
     lr_reduce_patience: int = 2
     lr_increase_patience: int = 2
     lr_min_scale: float = 2e-4
+    lr_round_floor: float = 0.0  # at each round start: scale >= lr_round_floor * (1 - progress)
     local_steps: int = 1
     # rewrites whose benefit only appears after pieces move apart/settle are scored after more local steps
     # (the baseline for the same touched pieces gets the same number of steps)
@@ -362,6 +363,7 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
         conflict = gradient_conflict(D, targets, cfg) if D.pieces else []
         if D.pieces:
             pk = Packed.build(D.pieces, cfg.render)
+            sched.scale = max(sched.scale, cfg.lr_round_floor * (1 - frac))
             opt = _make_opt(pk, cfg, sched.scale)
             sched.new_round()
             for _ in range(cfg.steps_per_round):

@@ -52,7 +52,7 @@ def silhouette_polygon(name: str, close_px: float = 0.15, simplify: float = 0.05
 
 
 # icons whose parts are separated by thin gaps (hat band, butterfly body, ladybug split) need a larger closing
-CLOSE = {"hat-fedora": 1.5, "butterfly": 0.9, "ladybug": 0.9, "bug": 0.6}
+CLOSE = {"dog-side": 0.9, "hat-fedora": 1.5, "butterfly": 0.9, "ladybug": 0.9, "bug": 0.6}
 
 
 def mdi_shape(name: str, area: float = DEFAULT_AREA, **kw) -> Shape:

@@ -68,6 +68,8 @@ def main(argv=None):
     ap.add_argument("--mode", choices=["fixed", "free"], default="free",
                     help="fixed: hold k after init; free: split/merge freely, finish at exactly k")
     ap.add_argument("--finish-frac", type=float, default=0.7)
+    ap.add_argument("--w-ov-end", type=float, default=None)
+    ap.add_argument("--lr-floor", type=float, default=None)
     ap.add_argument("--allow-flip", action="store_true")
     ap.add_argument("--rounds", type=int, default=200)
     ap.add_argument("--time-budget", type=float, default=None)
@@ -82,6 +84,10 @@ def main(argv=None):
     cfg = SRDConfig(n_rounds=a.rounds, seed=a.seed, time_budget_s=a.time_budget,
                     fixed_k=a.k if a.mode == "fixed" else None,
                     finish_k=a.k if a.mode == "free" else None, finish_frac=a.finish_frac)
+    if a.w_ov_end is not None:
+        cfg.w_ov_end = a.w_ov_end
+    if a.lr_floor is not None:
+        cfg.lr_round_floor = a.lr_floor
     if a.time_budget is not None:
         cfg.stopping_patience = None  # use the whole budget (restarts are compared at equal wall-clock)
     cfg.render.size = a.size

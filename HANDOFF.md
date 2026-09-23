@@ -8,7 +8,8 @@ The spec is in `TASK.md`. Assumptions and deviations are in `DEVIATIONS.md`.
 |---|---|
 | M0 Reproduce SRD | **Done** on a 14-shape subset (CPU). Reproduces the paper's range; see below. Per-shape rows in `m0/m0_results.csv`. |
 | M1 Multi-arrangement wrapper | **Done.** `srd_dissect/`, v0 rewrites with scopes and locks, 32 unit tests passing (`uv run pytest`). Integration smoke runs in `runs/m1_smoke/`. |
-| M2–M6 | Not started. |
+| M2 Harness | **Done.** `eval/`: Voronoi Scissors 6.1 protocol, validity checker, isometric overlap clean-up. 9 synthetic tests with known answers (`tests/test_m2.py`). |
+| M3–M6 | See below. |
 
 ## Setup
 
@@ -97,6 +98,14 @@ Accept rates (proposed → accepted), growth run:
 - **Free-k overshoots.** The piece count grows to 11–13 for a k = 4 problem, and several leftovers are tiny AddPart disks. M3 needs the finish-at-k step (free-k) or fixed-k, plus a stronger or annealed `w_part`.
 - **Overlap annealing works.** The mean overlap goes from ~2e-2 to ~1e-5 as w_ov goes 0.1 → 10, at a cost of about 1–2% IoU. Gaps between pieces are visible in the figures; the M2 validity pass will quantify them.
 - **ToLine does not dominate here, unlike the prototype.** The arc fraction stays at 0.83–0.91.
+
+## M2: evaluation harness
+
+- `eval/protocol.py` scales each target to 10,000 px² and applies the same scale to its arrangement. It samples 100 points evenly spaced along all boundary rings, aligns with translation-only ICP, and reports Chamfer (mean of the two directed means) and Hausdorff (max of the two directed maxima). The conventions are logged in DEVIATIONS.
+- `eval/validity.py` reports, per arrangement: pairwise overlap area, internal gap area (holes of the union), uncovered target area, and overhang area. It also checks that every piece is simple and connected. `remove_overlaps` is the polygon-level clean-up: each piece is trimmed in its local frame by earlier (larger) pieces from every arrangement. That keeps the result isometric and overlap-free, and turns the removed material into reported gaps.
+- `eval/evaluate.py` runs everything. **Headline numbers are on the cleaned, valid dissection**, with raw numbers alongside.
+- Tests: uniform sampling; ICP recovers a translation (score 0); concentric circles 2 px apart (Chamfer ≈ Hausdorff ≈ 2); a 5 px spike (Hausdorff ≈ 5); an exact 2-piece dissection (zero residuals); known overlap 0.5 and its clean-up; clean-up isometry across targets; a known internal gap; a self-intersecting piece is flagged.
+- Applied to the M1 smoke runs (40 rounds): Chamfer 8.3–8.7, Hausdorff 31–32 px, 4–5% of the target uncovered, overlap ≤ 6 px² raw and 0 after clean-up.
 
 ## Findings from reading d4descent (inputs to M1)
 
