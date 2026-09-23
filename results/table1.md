@@ -3,3 +3,4 @@ Stand-in inputs (Material Design Icons silhouettes), NOT comparable to Voronoi S
 | Pair | k | Reflections | Avg Chamfer | Avg Hausdorff | VS Chamfer | VS Hausdorff | Uncovered px² (A+B) | Overhang px² | Gap px² | Raw overlap px² | Pieces | Seed |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | dog-bone | 4 | no | 3.96 | 24.07 | 2.54 | 8.89 | 1259 | 772 | 39 | 6.2 | 4 | 2 |
+| dog-duck | 6 | yes | 7.36 | 27.75 | — | — | 1388 | 590 | 300 | 6.1 | 6 | 2 |

@@ -1,0 +1,116 @@
+{
+ "args": {
+  "pair": "['mdi:dog-side', 'mdi:bone']",
+  "k": "5",
+  "init": "partition",
+  "mode": "fixed",
+  "finish_frac": "0.7",
+  "w_ov_end": "None",
+  "lr_floor": "None",
+  "allow_flip": "False",
+  "rounds": "100000",
+  "time_budget": "2400.0",
+  "seed": "0",
+  "size": "128",
+  "threads": "1",
+  "out": "runs/bench/dog-bone_k5/seed0"
+ },
+ "config": {
+  "n_rounds": 100000,
+  "steps_per_round": 25,
+  "optimizer": "sgd",
+  "lr": {
+   "vertices": 0.5,
+   "bulges": 0.5,
+   "rotation": 1.0,
+   "translation": 0.5
+  },
+  "adam_lr": {
+   "vertices": 0.002,
+   "bulges": 0.002,
+   "rotation": 0.01,
+   "translation": 0.002
+  },
+  "clip_grad": 2.0,
+  "lr_factor": 0.5,
+  "lr_reduce_patience": 2,
+  "lr_increase_patience": 2,
+  "lr_min_scale": 0.0002,
+  "lr_round_floor": 0.0,
+  "local_steps": 1,
+  "local_steps_by_kind": {
+   "CutPart": 5,
+   "SwapPoses": 5,
+   "Rotate": 3,
+   "Flip": 3,
+   "Relocate": 3,
+   "AddPart": 3
+  },
+  "finish_k": null,
+  "finish_frac": 0.7,
+  "better_abs_eps": 1e-08,
+  "w_ov_start": 0.1,
+  "w_ov_end": 10.0,
+  "max_batch_prims": 800,
+  "stopping_patience": null,
+  "time_budget_s": 2400.0,
+  "fixed_k": 5,
+  "seed": 0,
+  "proposal": {
+   "n_proposals": 64,
+   "family_weights": {
+    "grammar": 0.4,
+    "CutPart": 0.15,
+    "AddPart": 0.1,
+    "RemoveSmallPart": 0.05,
+    "Rotate": 0.1,
+    "Flip": 0.05,
+    "SwapPoses": 0.1,
+    "Relocate": 0.0
+   },
+   "allow_flip": false,
+   "lossy_threshold": 0.03,
+   "cut_tries": 20,
+   "cut_t_range": [
+    0.2,
+    0.8
+   ],
+   "add_radius": 0.04,
+   "add_segments": 4,
+   "remove_area": 0.01,
+   "min_piece_area": 0.001,
+   "swap_area_ratio": 2.0,
+   "rotate_angles": [
+    1.5707963267948966,
+    -1.5707963267948966,
+    3.141592653589793
+   ]
+  },
+  "repair": {
+   "remove_area": 0.002
+  },
+  "loss": {
+   "w_cov": 1.0,
+   "w_ov": 1.0,
+   "w_fold": 1.0,
+   "w_short": 0.0001,
+   "short_px": 1.0,
+   "w_part": 0.0001,
+   "w_seg": 1e-05
+  },
+  "render": {
+   "size": 128,
+   "lim": [
+    -1.5,
+    1.5
+   ],
+   "blur": 0.7071067811865476,
+   "ks_scale": 0.7071067811865476
+  }
+ },
+ "hardware": {
+  "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
+  "cpu_threads": 1,
+  "torch": "2.14.0+cu130"
+ }
+}

@@ -1,0 +1,45 @@
+{
+ "run": "runs/bench/dog-duck_k6_flip/seed2",
+ "n_pieces": 6,
+ "avg_chamfer": 7.358532038917471,
+ "avg_hausdorff": 27.747093930648393,
+ "targets": {
+  "dog-side": {
+   "iou_raw": 0.8868058341532244,
+   "iou_legs_raw": 0.8838090770417256,
+   "iou_ears_head_raw": 0.8540834326622327,
+   "overlap_px2_raw": 1.4365849343928696,
+   "gap_px2_raw": 81.32948301502763,
+   "uncovered_px2_raw": 785.2573253086751,
+   "overhang_px2_raw": 390.9360085458918,
+   "chamfer": 6.8637677529016905,
+   "hausdorff": 23.67039387994855,
+   "iou_clean": 0.8863569936926414,
+   "iou_legs_clean": 0.8838078722448892,
+   "iou_ears_head_clean": 0.8540543523458656,
+   "overlap_px2_clean": 1.9278730930920573e-14,
+   "gap_px2_clean": 81.54665795414465,
+   "uncovered_px2_clean": 789.9344293187304,
+   "overhang_px2_clean": 390.92108058099734
+  },
+  "duck": {
+   "iou_raw": 0.9219035026062414,
+   "iou_bill_raw": 0.8916331383766722,
+   "iou_tail_raw": 0.8457737770244349,
+   "overlap_px2_raw": 4.69203217366132,
+   "gap_px2_raw": 219.35404338486694,
+   "uncovered_px2_raw": 597.0601586268431,
+   "overhang_px2_raw": 199.48380149438367,
+   "chamfer": 7.853296324933252,
+   "hausdorff": 31.82379398134824,
+   "iou_clean": 0.9217738700620549,
+   "iou_bill_clean": 0.8916331383766722,
+   "iou_tail_clean": 0.8457737770244349,
+   "overlap_px2_clean": 2.1103233819347714e-14,
+   "gap_px2_clean": 218.30259091277853,
+   "uncovered_px2_clean": 598.4372153068903,
+   "overhang_px2_clean": 199.4242731791976
+  }
+ },
+ "n_flipped_poses": 1
+}
