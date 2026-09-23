@@ -44,6 +44,12 @@ class SRDConfig:
     lr_increase_patience: int = 2
     lr_min_scale: float = 2e-4
     lr_round_floor: float = 0.0  # at each round start: scale >= lr_round_floor * (1 - progress)
+    # "adaptive": d4descent's plateau scheduler only (tends to collapse to lr_min_scale mid-run and freeze the pieces);
+    # "cosine": each round restarts at a cosine-decayed base (1 -> lr_cosine_end over the run) and the plateau
+    # scheduler may only lower it within the round, down to lr_cosine_band * base
+    lr_schedule: str = "adaptive"
+    lr_cosine_end: float = 0.02
+    lr_cosine_band: float = 0.1
     local_steps: int = 1
     # rewrites whose benefit only appears after pieces move apart/settle are scored after more local steps
     # (the baseline for the same touched pieces gets the same number of steps)
@@ -86,6 +92,7 @@ class AdaptiveScale:
     def __init__(self, cfg: SRDConfig):
         self.cfg = cfg
         self.scale = 1.0
+        self.lo, self.hi = cfg.lr_min_scale, 1.0
         self.best = float("inf")
         self.bad = 0
         self.good = 0
@@ -103,10 +110,10 @@ class AdaptiveScale:
         else:
             self.bad += 1
         if self.bad > c.lr_reduce_patience:
-            self.scale = max(self.scale * c.lr_factor, c.lr_min_scale)
+            self.scale = max(self.scale * c.lr_factor, self.lo)
             self.bad = self.good = 0
         if self.good > c.lr_increase_patience:
-            self.scale = min(self.scale * (1 / c.lr_factor) ** 0.5, 1.0)
+            self.scale = min(self.scale * (1 / c.lr_factor) ** 0.5, self.hi)
             self.bad = self.good = 0
 
 
@@ -364,6 +371,9 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
         if D.pieces:
             pk = Packed.build(D.pieces, cfg.render)
             sched.scale = max(sched.scale, cfg.lr_round_floor * (1 - frac))
+            if cfg.lr_schedule == "cosine":
+                base = cfg.lr_cosine_end + (1 - cfg.lr_cosine_end) * 0.5 * (1 + math.cos(math.pi * frac))
+                sched.scale, sched.hi, sched.lo = base, base, base * cfg.lr_cosine_band
             opt = _make_opt(pk, cfg, sched.scale)
             sched.new_round()
             for _ in range(cfg.steps_per_round):

@@ -68,7 +68,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--pair", nargs=2, default=["square", "triangle"])
     ap.add_argument("--k", type=int, default=4)
-    ap.add_argument("--init", choices=["partition", "growth"], default="partition")
+    ap.add_argument("--init", choices=["partition", "growth", "overlay"], default="partition")
+    ap.add_argument("--lr-schedule", choices=["adaptive", "cosine"], default="adaptive")
     ap.add_argument("--mode", choices=["fixed", "free"], default="free",
                     help="fixed: hold k after init; free: split/merge freely, finish at exactly k")
     ap.add_argument("--finish-frac", type=float, default=0.7)
@@ -90,6 +91,7 @@ def main(argv=None):
                     finish_k=a.k if a.mode == "free" else None, finish_frac=a.finish_frac)
     if a.w_ov_end is not None:
         cfg.w_ov_end = a.w_ov_end
+    cfg.lr_schedule = a.lr_schedule
     if a.lr_floor is not None:
         cfg.lr_round_floor = a.lr_floor
     if a.time_budget is not None:
@@ -103,6 +105,10 @@ def main(argv=None):
         from .geom import simplified
 
         D0 = partition_init(simplified(shapes[0]), targets, a.k, cfg.render, rng)
+    elif a.init == "overlay":
+        from .init import overlay_init
+
+        D0 = overlay_init(shapes[0], shapes[1], targets, a.k, cfg.render, rng, allow_flip=a.allow_flip)
     else:
         D0 = growth_init(targets, a.k, 0.08, cfg.render, rng)
 
