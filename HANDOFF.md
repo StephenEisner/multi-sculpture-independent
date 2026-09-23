@@ -9,7 +9,8 @@ The spec is in `TASK.md`. Assumptions and deviations are in `DEVIATIONS.md`.
 | M0 Reproduce SRD | **Done** on a 14-shape subset (CPU). Reproduces the paper's range; see below. Per-shape rows in `m0/m0_results.csv`. |
 | M1 Multi-arrangement wrapper | **Done.** `srd_dissect/`, v0 rewrites with scopes and locks, 32 unit tests passing (`uv run pytest`). Integration smoke runs in `runs/m1_smoke/`. |
 | M2 Harness | **Done.** `eval/`: Voronoi Scissors 6.1 protocol, validity checker, isometric overlap clean-up. 9 synthetic tests with known answers (`tests/test_m2.py`). |
-| M3–M6 | See below. |
+| M3 Sanity dissection | **Done, negative result.** SRD does not recover Dudeney's exact dissection: best of 28 restarts reaches Chamfer 6.5 / Hausdorff ~25 px. See below. |
+| M4–M6 | Running overnight on stand-in inputs (`scripts/run_benchmarks.sh`). |
 
 ## Setup
 
@@ -106,6 +107,30 @@ Accept rates (proposed → accepted), growth run:
 - `eval/evaluate.py` runs everything. **Headline numbers are on the cleaned, valid dissection**, with raw numbers alongside.
 - Tests: uniform sampling; ICP recovers a translation (score 0); concentric circles 2 px apart (Chamfer ≈ Hausdorff ≈ 2); a 5 px spike (Hausdorff ≈ 5); an exact 2-piece dissection (zero residuals); known overlap 0.5 and its clean-up; clean-up isometry across targets; a known internal gap; a self-intersecting piece is flagged.
 - Applied to the M1 smoke runs (40 rounds): Chamfer 8.3–8.7, Hausdorff 31–32 px, 4–5% of the target uncovered, overlap ≤ 6 px² raw and 0 after clean-up.
+
+## M3: square ↔ equilateral triangle, k = 4 (Dudeney)
+
+The targets are fitted to the window at a common area. Every configuration was run with 4 restarts × 10 min, 1 CPU thread each (`results/m3_sweep.csv`, runs in `runs/m3/`). All numbers are on the cleaned, valid dissection.
+
+| Config | Chamfer of kept restart | Hausdorff of kept restart | Per-restart Chamfer | Mean Chamfer | Mean Hausdorff |
+|---|---|---|---|---|---|
+| partition init, **fixed-k** | 6.81 | 24.6 | 7.41 / 9.36 / 6.85 / 6.81 | **7.61** | **26.0** |
+| partition init, free-k (finish at k from 70%) | 12.17 | 34.7 | 12.2 / 11.3 / 12.0 / 12.3 | 11.9 | — |
+| growth init, free-k | 9.43 | 39.0 | 11.8 / 11.6 / 9.4 / 14.4 | 11.8 | — |
+| fixed-k, w_ov_end = 3 | 8.02 | 38.3 | 6.50 / 7.42 / 10.2 / 8.02 | 8.03 | 32.8 |
+| fixed-k, per-round step-size floor 0.25 | 9.60 | 37.3 | 7.61 / 9.60 / 10.4 / 7.67 | 8.81 | 33.1 |
+| fixed-k, both | — | — | — | 8.75 | 34.2 |
+
+**Dudeney is not recovered.** 0 of 28 restarts come near the exact solution. The best is Chamfer 6.5, and every restart leaves 3–7% of each target uncovered plus 1–3% overhang. Overlap is driven to ≤ 7 px² raw (0 after clean-up).
+
+**Initialization and piece count.** **Fixed-k from a random-chord partition of A works best.** Free-k overgrows: about 17 pieces for k = 4, many of them small AddPart disks. The finishing phase then has to delete about 13 pieces in the last 30% of the budget, and the holes are never refilled. Growth vs partition under free-k is a wash. Free-k would need a cap on the piece count during growth (for example ≤ 2k) and an earlier finish; not done.
+
+**Tuning** was done on this pair only, and every benchmark pair uses the resulting hyperparameters. The tweaks did not beat the defaults on Chamfer/Hausdorff; they only reduce area error slightly. Defaults kept: w_ov annealed 0.1 → 10 geometrically over the run, no step-size floor.
+
+**Why it stalls** (from the logs):
+1. The adaptive step-size multiplier decays to its floor (2e-4) by the last third of a run. The pieces are then effectively frozen while w_ov is still rising.
+2. Fixed-k disables CutPart, so the piece *topology* is whatever the random initial chords gave. The optimizer can only bend those pieces, and Dudeney needs specific cut lines.
+3. The spread across restarts (Chamfer 6.5–10.4) is larger than the differences between configs. Selecting the restart by final loss does not always pick the lowest-Chamfer restart; the protocol says to select by L2, so I follow it.
 
 ## Findings from reading d4descent (inputs to M1)
 
