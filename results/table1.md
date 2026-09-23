@@ -12,3 +12,4 @@ Stand-in inputs (Material Design Icons silhouettes), NOT comparable to Voronoi S
 | dog-bone | 4 | yes | 7.11 | 29.05 | 2.54 | 8.89 | 1417 | 1958 | 33 | 30.1 | 4 | 3 |
 | dog-bone | 5 | yes | 5.02 | 25.51 | 3.85 | 13.69 | 1213 | 557 | 162 | 7.6 | 5 | 0 |
 | serpent-apple | 5 | yes | 8.47 | 34.33 | 6.60 | 29.36 | 1167 | 415 | 189 | 7.9 | 5 | 1 |
+| bunny-egg | 6 | yes | 6.88 | 33.25 | 3.26 | 9.74 | 1087 | 403 | 199 | 17.3 | 6 | 1 |

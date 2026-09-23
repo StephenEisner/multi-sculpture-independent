@@ -174,3 +174,69 @@ r172 2336s L=0.04714 cov=[0.0267, 0.0163] ov=[0.00022, 8e-05] P=6 S=55 arc=0.96 
 r173 2348s L=0.04714 cov=[0.0267, 0.0163] ov=[0.00022, 8e-05] P=6 S=55 arc=0.98 lr=0.0002 w_ov=8.84 iou=[0.881, 0.921] acc=0
 r174 2361s L=0.04713 cov=[0.0267, 0.0163] ov=[0.00022, 8e-05] P=6 S=55 arc=0.96 lr=0.0002 w_ov=9.05 iou=[0.881, 0.921] acc=1
 r175 2374s L=0.04712 cov=[0.0267, 0.0163] ov=[0.00022, 8e-05] P=6 S=55 arc=0.96 lr=0.0002 w_ov=9.29 iou=[0.881, 0.921] acc=0
+r176 2386s L=0.0471 cov=[0.0267, 0.0163] ov=[0.00022, 8e-05] P=6 S=55 arc=0.96 lr=0.0002 w_ov=9.51 iou=[0.881, 0.921] acc=1
+r177 2399s L=0.04709 cov=[0.0267, 0.0163] ov=[0.00021, 8e-05] P=6 S=55 arc=0.98 lr=0.0002 w_ov=9.75 iou=[0.881, 0.921] acc=0
+r178 2411s L=0.04708 cov=[0.0267, 0.0163] ov=[0.00021, 8e-05] P=6 S=55 arc=0.98 lr=0.0002 w_ov=9.98 iou=[0.881, 0.921] acc=0
+{
+ "Split": {
+  "proposed": 3773,
+  "accepted": 17,
+  "scope": "shared",
+  "rate": 0.004505698383249403
+ },
+ "ToArc": {
+  "proposed": 332,
+  "accepted": 182,
+  "scope": "shared",
+  "rate": 0.5481927710843374
+ },
+ "SwapPoses": {
+  "proposed": 1007,
+  "accepted": 0,
+  "scope": "per-target",
+  "rate": 0.0
+ },
+ "Rotate": {
+  "proposed": 1776,
+  "accepted": 6,
+  "scope": "per-target",
+  "rate": 0.0033783783783783786
+ },
+ "Merge": {
+  "proposed": 1090,
+  "accepted": 56,
+  "scope": "shared",
+  "rate": 0.05137614678899083
+ },
+ "Flip": {
+  "proposed": 811,
+  "accepted": 4,
+  "scope": "per-target",
+  "rate": 0.004932182490752158
+ },
+ "MergeClose": {
+  "proposed": 172,
+  "accepted": 10,
+  "scope": "shared",
+  "rate": 0.05813953488372093
+ },
+ "forced:RemoveSmallPart": {
+  "proposed": 0,
+  "accepted": 2,
+  "scope": "shared",
+  "rate": 2.0
+ },
+ "ToLine": {
+  "proposed": 2495,
+  "accepted": 104,
+  "scope": "shared",
+  "rate": 0.04168336673346693
+ },
+ "forced:CutPart": {
+  "proposed": 0,
+  "accepted": 1,
+  "scope": "shared",
+  "rate": 1.0
+ }
+}
+EVAL avg_chamfer=6.425 avg_hausdorff=33.601 pieces=6->6 loss=0.047083
