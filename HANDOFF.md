@@ -59,4 +59,4 @@ Runtime is 12–60× slower than the paper's GPU timings, which is expected on o
 
 1. **Voronoi Scissors / Duncan et al. inputs.** They can't be fetched from this environment (egress policy). Can you add the original shape files to the repo, or should I trace them from Fig. 13 (results then labelled "traced inputs, not directly comparable")?
 2. **Prototypes.** `tri_grammar_srd.py`, `two_target_srd.py`, the dog/duck snapshot and `SRD_BASELINE_TASK.md` aren't in the repo. Push them if you want them used; the dog and duck silhouettes in particular are needed for M6.
-3. **Compute.** M0 on 4 CPU cores takes roughly an hour per shape vs 80 s on the paper's GPU. The Voronoi Scissors budgets (1–6 h on a 56-core Xeon) aren't reproducible here at equal wall-clock. Is a GPU or larger-CPU environment available for M4/M5?
+3. **Compute.** M0 took 8–86 min per shape on one CPU thread vs 80–107 s on the paper's GPU. The Voronoi Scissors budgets (1–6 h on a 56-core Xeon) aren't reproducible here at equal wall-clock. Is a GPU or larger-CPU environment available for M4/M5?
