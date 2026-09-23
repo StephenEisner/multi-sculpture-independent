@@ -350,3 +350,24 @@ def test_propose_produces_valid_scoped_rewrites():
         removed, added = apply_rewrite(D.clone(), r)
         if r.scope == "per-target":
             assert r.t is not None
+
+
+def test_cropped_rasterization_matches_full():
+    """Per-piece cropped rendering equals the full-grid rendering (values and gradients), incl. major arcs/flips."""
+    D = make_dissection()
+    # add a piece with a major arc (|k| > chord/2)
+    prims = polygon_prims([(-0.2, -0.1), (0.2, -0.1), (0.0, 0.2)])
+    prims[0] = Arc(prims[0].start, prims[0].end, torch.tensor(0.35))
+    D.pieces.append(Piece(2, Shape(prims), [Pose(0.4, 0.1, 0.9, -1), Pose(-2.0, 0.9, 0.1, 1)]))
+    tg = torch.stack([render_target_image(TG.square(), CFG), render_target_image(TG.equilateral_triangle(), CFG)])
+    outs = []
+    for crop in (False, True):
+        pk = Packed.build(D.pieces, CFG)
+        pk.crop = crop
+        occ = [pk.occupancy(t) for t in range(2)]
+        cov, ov = image_terms(torch.stack([o.sum(0) for o in occ])[None], tg)
+        g = torch.autograd.grad((cov + ov).sum(), [pk.sc.control_points, pk.sc.ks, pk.theta, pk.trans])
+        outs.append((torch.stack(occ).detach(), g))
+    assert float((outs[0][0] - outs[1][0]).abs().max()) < 1e-6
+    for a, b in zip(outs[0][1], outs[1][1]):
+        assert torch.allclose(a, b, atol=1e-7, rtol=1e-4)

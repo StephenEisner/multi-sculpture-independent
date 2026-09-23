@@ -44,6 +44,13 @@ class SRDConfig:
     lr_increase_patience: int = 2
     lr_min_scale: float = 2e-4
     local_steps: int = 1
+    # rewrites whose benefit only appears after pieces move apart/settle are scored after more local steps
+    # (the baseline for the same touched pieces gets the same number of steps)
+    local_steps_by_kind: dict[str, int] = field(default_factory=lambda: {
+        "CutPart": 5, "SwapPoses": 5, "Rotate": 3, "Flip": 3, "Relocate": 3, "AddPart": 3})
+    # piece-count control for free-k runs: from finish_frac of the run on, force the piece count to finish_k
+    finish_k: int | None = None
+    finish_frac: float = 0.7
     better_abs_eps: float = 1e-8
     w_ov_start: float = 0.1
     w_ov_end: float = 10.0
@@ -122,9 +129,10 @@ def _occ_cache(D: Dissection, cfg: SRDConfig, T: int):
 
 
 def _eval_variants(variants: list[_Variant], D: Dissection, targets: torch.Tensor, cfg: SRDConfig, lr_scale: float,
-                   occ: torch.Tensor, reg: torch.Tensor, row: dict[int, int]) -> None:
-    """Fill v.loss for each variant: loss (all targets, incl. simplicity) after cfg.local_steps local steps on the
+                   occ: torch.Tensor, reg: torch.Tensor, row: dict[int, int], steps: int | None = None) -> None:
+    """Fill v.loss for each variant: loss (all targets, incl. simplicity) after `steps` local steps on the
     variant's added pieces, with every other piece held fixed at its cached occupancy."""
+    steps = cfg.local_steps if steps is None else steps
     T = targets.shape[0]
     base_sum = occ.sum(0)  # (T, H, W)
     reg_total = reg.sum()
@@ -177,7 +185,7 @@ def _eval_variants(variants: list[_Variant], D: Dissection, targets: torch.Tenso
             r = torch.zeros(V).index_add(0, vid, piece_regularizers(pk, lc))
             return (lc.w_cov * cov + lc.w_ov * ov).sum(-1) + rest_reg + r  # (V,)
 
-        for _ in range(cfg.local_steps):
+        for _ in range(steps):
             opt.zero_grad()
             losses().sum().backward()
             _clip(pk, cfg)
@@ -214,13 +222,22 @@ def score_rewrites(D: Dissection, rws: list[Rewrite], targets: torch.Tensor, cfg
         except Exception:
             props.append(None)
             failed.append(rw)
-    baselines: dict[frozenset[int], _Variant] = {}
-    for v in props:
-        if v is not None and v.removed not in baselines:
-            baselines[v.removed] = _Variant(v.removed, [P[p].clone() for p in v.removed])
-    _eval_variants([v for v in props if v is not None] + list(baselines.values()), D, targets, cfg, lr_scale,
-                   occ, reg, row)
-    deltas = [float("-inf") if v is None else baselines[v.removed].loss - v.loss for v in props]
+    steps_of = lambda rw: cfg.local_steps_by_kind.get(rw.kind, cfg.local_steps)
+    baselines: dict[tuple[frozenset[int], int], _Variant] = {}
+    groups: dict[int, list[_Variant]] = {}
+    for rw, v in zip(rws, props):
+        if v is None:
+            continue
+        k = steps_of(rw)
+        groups.setdefault(k, []).append(v)
+        if (v.removed, k) not in baselines:
+            b = _Variant(v.removed, [P[p].clone() for p in v.removed])
+            baselines[(v.removed, k)] = b
+            groups[k].append(b)
+    for k, vs in groups.items():
+        _eval_variants(vs, D, targets, cfg, lr_scale, occ, reg, row, steps=k)
+    deltas = [float("-inf") if v is None else baselines[(v.removed, steps_of(rw))].loss - v.loss
+              for rw, v in zip(rws, props)]
     return deltas, failed
 
 
@@ -319,6 +336,12 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
     if cfg.fixed_k is not None:
         for f in ("CutPart", "AddPart", "RemoveSmallPart"):
             pcfg.family_weights[f] = 0.0
+        cfg.finish_k, cfg.finish_frac = cfg.fixed_k, 0.0  # repair may still split/drop pieces: restore k
+    pcfg_fin = copy.deepcopy(pcfg)
+    for f in ("CutPart", "AddPart", "RemoveSmallPart"):
+        pcfg_fin.family_weights[f] = 0.0
+    target_k = cfg.finish_k
+    best_any = (float("inf"), D.clone())
     sched = AdaptiveScale(cfg)
     accept = defaultdict(lambda: [0, 0])  # kind -> [proposed, accepted]
     history: list[RoundLog] = []
@@ -329,6 +352,10 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
 
     for r in range(cfg.n_rounds):
         frac = r / max(cfg.n_rounds - 1, 1)
+        if cfg.time_budget_s is not None:
+            frac = max(frac, (time.time() - t0) / cfg.time_budget_s)
+        frac = min(frac, 1.0)
+        finishing = target_k is not None and frac >= cfg.finish_frac
         cfg.loss.w_ov = cfg.w_ov_start * (cfg.w_ov_end / cfg.w_ov_start) ** frac
 
         # 1. continuous phase
@@ -362,9 +389,12 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
             else:
                 cov, ov = image_terms(torch.zeros(1, *targets.shape), targets)
                 cur = type("B", (), {"total": float(cov.sum()), "cov": cov[0].tolist(), "ov": [0.0] * T})()
-        if cur.total < best[0] * (1 - 1e-4):
+        if cur.total < best_any[0]:
+            best_any = (cur.total, D.clone())
+        at_k = target_k is None or len(D.pieces) == target_k
+        if at_k and cur.total < best[0] * (1 - 1e-4):
             best, stall = (cur.total, D.clone()), 0
-        else:
+        elif target_k is None or finishing:  # with a piece-count target, patience only runs in the finishing phase
             stall += 1
 
         # 3. propose
@@ -375,7 +405,7 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
             else:
                 s = torch.zeros_like(targets)
             residual = [grid[(targets[t] - s[t].clamp(0, 1)) > 0.5] for t in range(T)]
-        rws = propose(D, residual, pcfg, rng)
+        rws = propose(D, residual, pcfg_fin if finishing else pcfg, rng)
 
         # 4. score, 5. apply
         chosen: list[Rewrite] = []
@@ -388,6 +418,24 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
                 accept[rw.kind][1] += 1
             if chosen:
                 D = apply_many(D, chosen)
+
+        # 6. finishing phase: force the piece count towards target_k, one structural step per round, choosing the
+        # least harmful removal / most useful cut by the same scoring
+        if finishing and D.pieces and len(D.pieces) != target_k:
+            if len(D.pieces) > target_k:
+                forced = [Rewrite("RemoveSmallPart", pid=p.pid) for p in D.pieces]
+            else:
+                cut_cfg = copy.deepcopy(pcfg)
+                cut_cfg.family_weights = {"CutPart": 1.0}
+                cut_cfg.n_proposals = 16
+                forced = propose(D, residual, cut_cfg, rng)
+            if forced:
+                fd, _ = score_rewrites(D, forced, targets, cfg, sched.scale)
+                i = max(range(len(forced)), key=lambda j: fd[j])
+                if fd[i] > float("-inf"):
+                    D = apply_many(D, [forced[i]])
+                    chosen = chosen + [forced[i]]
+                    accept["forced:" + forced[i].kind][1] += 1
 
         entry = RoundLog(r, time.time() - t0, cur.total, list(cur.cov), list(cur.ov), len(D.pieces), D.n_segments(),
                          _arc_fraction(D), sched.scale, cfg.loss.w_ov, len(rws), [repr(c) for c in chosen],
@@ -402,8 +450,11 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
 
     hist = {"rounds": [e.__dict__ for e in history],
             "accept": {k: {"proposed": v[0], "accepted": v[1],
-                           "scope": Rewrite(k).scope if k else "", "rate": v[1] / max(v[0], 1)}
+                           "scope": Rewrite(k.split(":")[-1]).scope, "rate": v[1] / max(v[0], 1)}
                        for k, v in accept.items()}}
+    if best[0] == float("inf"):  # never reached target_k
+        best = best_any
+    hist["reached_k"] = target_k is None or len(best[1].pieces) == target_k
     return best[1], best[0], hist
 
 

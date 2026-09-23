@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 import torch
 
-from d4descent.objects.arclines import ShapeCollection, ShapeCollectionArgs
+from d4descent.objects.arclines import ShapeCollection, ShapeCollectionArgs, ShapeMeta
 
 from .state import Piece, Pose
 
@@ -49,6 +49,7 @@ class Packed:
     k_piece: torch.Tensor  # (n_ks,) piece index of each bulge parameter
     pids: list[int]
     cfg: RenderConfig
+    crop: bool = True  # rasterize each piece only on its (conservative) bounding box
 
     @staticmethod
     def build(pieces: list[Piece], cfg: RenderConfig, requires_grad: bool = True) -> "Packed":
@@ -101,9 +102,73 @@ class Packed:
 
     def occupancy(self, t: int, grid: torch.Tensor | None = None) -> torch.Tensor:
         """Soft occupancy of each piece in target t: (P, H, W) in [0, 1]."""
+        if self.crop and grid is None:
+            return self._occupancy_cropped(t)
         grid = self.cfg.grid() if grid is None else grid
         sdf, _ = self.target_collection(t)._rasterize(grid)
         return self.cfg.ramp(sdf)
+
+    def _piece_slices(self):
+        """Per piece: a single-shape ShapeCollection skeleton (its own lines/arcs, global point indices)."""
+        if getattr(self, "_slices", None) is None:
+            sl = []
+            for sm in self.sc.shapes:
+                sl.append((self.sc.lines[sm.line_idx], self.sc.arcs[sm.arcs_idx],
+                           ShapeMeta(line_idx=torch.arange(len(sm.line_idx)), arcs_idx=torch.arange(len(sm.arcs_idx)),
+                                     order=list(sm.order))))
+            self._slices = sl
+        return self._slices
+
+    @torch.no_grad()
+    def _pixel_boxes(self, sc_t: ShapeCollection) -> torch.Tensor:
+        """Conservative per-piece pixel box (P, 4) = (r0, r1, c0, c1), including the ramp margin."""
+        cp = sc_t.control_points.detach()
+        pts = [cp]
+        piece = [self.pt_piece]
+        if sc_t.arcs.shape[0]:
+            s, e = cp[sc_t.arcs[:, 0]], cp[sc_t.arcs[:, 1]]
+            k = sc_t.ks.detach()[sc_t.arcs[:, 2]] * sc_t.args.ks_scale
+            d = e - s
+            n = d.norm(dim=-1, keepdim=True).clamp(min=1e-9)
+            perp = torch.stack([-d[:, 1], d[:, 0]], -1) / n
+            off = -k[:, None] * perp  # bulge side (the arc's far point is mid - k * perp)
+            minor = (k.abs()[:, None] <= n / 2)
+            r = (k.square()[:, None] + (n / 2).square()) / (2 * k.abs()[:, None].clamp(min=1e-9))
+            o = (s + e) / 2 + (r * torch.sign(k)[:, None] - k[:, None]) * perp
+            R = torch.stack([r[:, 0], r[:, 0]], -1)
+            c1 = torch.where(minor, s + off, o - R)
+            c2 = torch.where(minor, e + off, o + R)
+            ap = self.pt_piece[sc_t.arcs[:, 0]]
+            pts += [c1, c2]
+            piece += [ap, ap]
+        X = torch.cat(pts)
+        Pi = torch.cat(piece)
+        Pn = self.n_pieces
+        lo = torch.full((Pn, 2), float("inf")).scatter_reduce(0, Pi[:, None].expand(-1, 2), X, "amin")
+        hi = torch.full((Pn, 2), float("-inf")).scatter_reduce(0, Pi[:, None].expand(-1, 2), X, "amax")
+        cfg = self.cfg
+        m = 2.0 + cfg.blur  # pixels of margin
+        to_px = lambda v: (v - cfg.lim[0]) / cfg.pixel - 0.5
+        c0 = (to_px(lo[:, 0]) - m).floor().clamp(0, cfg.size)
+        c1 = (to_px(hi[:, 0]) + m).ceil().clamp(0, cfg.size) + 1
+        r0 = (to_px(lo[:, 1]) - m).floor().clamp(0, cfg.size)
+        r1 = (to_px(hi[:, 1]) + m).ceil().clamp(0, cfg.size) + 1
+        return torch.stack([r0, r1.clamp(max=cfg.size), c0, c1.clamp(max=cfg.size)], -1).long()
+
+    def _occupancy_cropped(self, t: int) -> torch.Tensor:
+        sc_t = self.target_collection(t)
+        boxes = self._pixel_boxes(sc_t).tolist()
+        grid = self.cfg.grid()
+        H = W = self.cfg.size
+        out = torch.zeros(self.n_pieces, H, W)
+        for i, ((r0, r1, c0, c1), (lines, arcs, meta)) in enumerate(zip(boxes, self._piece_slices())):
+            if r1 <= r0 or c1 <= c0:
+                continue
+            one = ShapeCollection(control_points=sc_t.control_points, ks=sc_t.ks, lines=lines, arcs=arcs,
+                                  shapes=[meta], shape_ids=[0], shape_payloads=[None], args=sc_t.args)
+            sdf, _ = one._rasterize(grid[r0:r1, c0:c1])
+            out[i, r0:r1, c0:c1] = self.cfg.ramp(sdf[0])
+        return out
 
     def local_areas(self) -> torch.Tensor:
         """Signed local area per piece (P,) — CCW positive. Differentiable."""

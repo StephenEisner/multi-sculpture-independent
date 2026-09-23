@@ -41,3 +41,16 @@ BUILTIN = {"square": square, "triangle": equilateral_triangle, "disk": disk}
 
 def get(name: str, area: float = DEFAULT_AREA) -> Shape:
     return BUILTIN[name](area)
+
+
+def fit_pair(shapes: list[Shape], lim: float = 1.5, fill: float = 0.85) -> list[Shape]:
+    """Scale all targets to one common area, as large as possible such that every target (centred on its area
+    centroid) fits inside fill * [-lim, lim]^2. Equal areas are required for a dissection."""
+    from .geom import sample_boundary
+
+    exts = []
+    for s in shapes:
+        P = sample_boundary(normalize(s, DEFAULT_AREA), 16)
+        exts.append(float(P.abs().max()))
+    k = min(fill * lim / e for e in exts)
+    return [normalize(s, DEFAULT_AREA * k * k) for s in shapes]

@@ -30,6 +30,15 @@ def save_dissection(D, path):
                             "poses": [dataclasses.asdict(x) for x in p.poses]} for p in D.pieces]}, path)
 
 
+def get_shape(name: str):
+    """'square' / 'triangle' / 'disk', or 'mdi:<icon>' for a Material Design Icons stand-in silhouette."""
+    if name.startswith("mdi:"):
+        from .shapes_mdi import mdi_shape
+
+        return mdi_shape(name[4:])
+    return TG.get(name)
+
+
 def load_dissection(path):
     from d4descent.objects.arclines import Arc, Line, Shape
 
@@ -56,7 +65,9 @@ def main(argv=None):
     ap.add_argument("--pair", nargs=2, default=["square", "triangle"])
     ap.add_argument("--k", type=int, default=4)
     ap.add_argument("--init", choices=["partition", "growth"], default="partition")
-    ap.add_argument("--fixed-k", action="store_true")
+    ap.add_argument("--mode", choices=["fixed", "free"], default="free",
+                    help="fixed: hold k after init; free: split/merge freely, finish at exactly k")
+    ap.add_argument("--finish-frac", type=float, default=0.7)
     ap.add_argument("--allow-flip", action="store_true")
     ap.add_argument("--rounds", type=int, default=200)
     ap.add_argument("--time-budget", type=float, default=None)
@@ -69,10 +80,13 @@ def main(argv=None):
     a.out.mkdir(parents=True, exist_ok=True)
 
     cfg = SRDConfig(n_rounds=a.rounds, seed=a.seed, time_budget_s=a.time_budget,
-                    fixed_k=a.k if a.fixed_k else None)
+                    fixed_k=a.k if a.mode == "fixed" else None,
+                    finish_k=a.k if a.mode == "free" else None, finish_frac=a.finish_frac)
+    if a.time_budget is not None:
+        cfg.stopping_patience = None  # use the whole budget (restarts are compared at equal wall-clock)
     cfg.render.size = a.size
     cfg.proposal.allow_flip = a.allow_flip
-    shapes = [TG.get(n) for n in a.pair]
+    shapes = TG.fit_pair([get_shape(n) for n in a.pair], lim=cfg.render.lim[1])
     targets = torch.stack([render_target_image(s, cfg.render) for s in shapes])
     rng = random.Random(a.seed)
     if a.init == "partition":
@@ -106,7 +120,17 @@ def main(argv=None):
     plot_dissection(best, targets, cfg.render, a.out / "best.png",
                     f"{a.pair[0]} <-> {a.pair[1]}  k={a.k} init={a.init} seed={a.seed}  "
                     f"L={L:.4g}  pieces={len(best.pieces)}", a.pair)
+    from eval.evaluate import evaluate
+
+    ev = evaluate(best, shapes)
+    ev["best_loss"] = L
+    ev["reached_k"] = hist.get("reached_k")
+    ev["wall_s"] = hist["wall_s"]
+    ev["seed"] = a.seed
+    (a.out / "eval.json").write_text(json.dumps(ev, default=float))
     print(json.dumps(hist["accept"], indent=1))
+    print(f"EVAL avg_chamfer={ev['avg_chamfer']:.3f} avg_hausdorff={ev['avg_hausdorff']:.3f} "
+          f"pieces={ev['n_pieces']}->{ev['n_pieces_clean']} loss={L:.5g}")
 
 
 if __name__ == "__main__":
