@@ -90,3 +90,25 @@ def score_arrangement(arrangement, target, n: int = N_SAMPLES) -> ShapeScore:
     t = icp_translation(pa, pb)
     c, h = chamfer_hausdorff(pa + t, pb)
     return ShapeScore(float(c), float(h), float(np.linalg.norm(t)))
+
+
+def surface_scores(arrangement, target, n: int = 400, tol_px: float = 1.0) -> dict:
+    """Surface-first scores (px at 10,000 px^2). The target surface is every boundary ring of the target (outline and
+    real holes). Interior gaps between pieces are not penalized unless they reach the surface.
+    - surface_coverage: fraction of target-surface samples within tol_px of the arrangement
+    - surface_miss_mean / _max: distance from target-surface samples to the arrangement (0 where covered)
+    - overhang_max / overhang_area: how far / how much the arrangement sticks out of the target"""
+    s = px_scale(target)
+    A = shapely.affinity.scale(arrangement, s, s, origin=(0, 0))
+    B = shapely.affinity.scale(target, s, s, origin=(0, 0))
+    # no ICP here: the arrangement is optimized against the target in place, and ICP would be pulled by the edges
+    # of interior gaps, which these scores deliberately ignore
+    pb = sample_boundary_uniform(B, n)
+    d = shapely.distance(A, shapely.points(pb))
+    out = A.difference(B)
+    over = 0.0
+    if not out.is_empty:
+        po = sample_boundary_uniform(out, n)
+        over = float(shapely.distance(B, shapely.points(po)).max())
+    return {"surface_coverage": float((d <= tol_px).mean()), "surface_miss_mean": float(d.mean()),
+            "surface_miss_max": float(d.max()), "overhang_max": over, "overhang_area_px2": float(out.area)}

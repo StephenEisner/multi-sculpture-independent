@@ -146,3 +146,19 @@ def test_piece_validity_flags_self_intersection():
 
     rep = full_report(D, [shapely.box(0, 0, 1, 1)], {0: shapely.Polygon([(0, 0), (1, 1), (1, 0), (0, 1)])})
     assert not rep["all_pieces_simple_connected"]
+
+
+def test_surface_scores():
+    """Interior gap: surface fully covered. Missing bite at the edge: miss distance ~ bite depth. Spike: overhang."""
+    from eval.protocol import surface_scores
+
+    T = shapely.box(0, 0, 100, 100)
+    gap = T.difference(shapely.box(40, 40, 60, 60))
+    s = surface_scores(gap, T)
+    assert s["surface_coverage"] == 1.0 and s["overhang_max"] == 0.0
+    bite = T.difference(shapely.box(40, 90, 60, 100.1))
+    s = surface_scores(bite, T)
+    assert s["surface_coverage"] < 0.97 and 8.0 < s["surface_miss_max"] <= 10.0 + 1e-6
+    spike = shapely.union(T, shapely.box(49, 100, 51, 106))
+    s = surface_scores(spike, T)
+    assert s["surface_coverage"] == 1.0 and 5.0 < s["overhang_max"] <= 6.0 + 1e-6

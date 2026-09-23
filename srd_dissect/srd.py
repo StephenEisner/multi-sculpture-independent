@@ -160,7 +160,7 @@ def _eval_variants(variants: list[_Variant], D: Dissection, targets: torch.Tenso
     for v in variants:
         if not v.added:
             s, r, g = const_part(v)
-            cov, ov = image_terms(s[None], targets)
+            cov, ov = image_terms(s[None], targets, lc.cov_weights)
             v.loss = float((lc.w_cov * cov + lc.w_ov * ov).sum() + r) + g
 
     todo = [v for v in variants if v.added]
@@ -189,7 +189,7 @@ def _eval_variants(variants: list[_Variant], D: Dissection, targets: torch.Tenso
         def losses() -> torch.Tensor:
             new = torch.stack([torch.zeros(V, *targets.shape[1:]).index_add(0, vid, pk.occupancy(t))
                                for t in range(T)], 1)  # (V, T, H, W)
-            cov, ov = image_terms(rest + new, targets)
+            cov, ov = image_terms(rest + new, targets, lc.cov_weights)
             r = torch.zeros(V).index_add(0, vid, piece_regularizers(pk, lc))
             return (lc.w_cov * cov + lc.w_ov * ov).sum(-1) + rest_reg + r  # (V,)
 
@@ -289,7 +289,8 @@ def gradient_conflict(D: Dissection, targets: torch.Tensor, cfg: SRDConfig) -> l
     grads = []
     occ = [pk.occupancy(t) for t in range(2)]
     for t in range(2):
-        cov, ov = image_terms(occ[t].sum(0)[None, None], targets[t : t + 1])
+        cw = lc.cov_weights[t : t + 1] if lc.cov_weights is not None else None
+        cov, ov = image_terms(occ[t].sum(0)[None, None], targets[t : t + 1], cw)
         L = (lc.w_cov * cov + lc.w_ov * ov).sum()
         gcp, gk = torch.autograd.grad(L, [pk.sc.control_points, pk.sc.ks], retain_graph=True, allow_unused=True)
         grads.append((gcp if gcp is not None else torch.zeros_like(pk.sc.control_points),
@@ -399,7 +400,7 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
                 pk0 = Packed.build(D.pieces, cfg.render, requires_grad=False)
                 _, cur = dissection_loss(pk0, targets, eval_loss, D.n_segments())
             else:
-                cov, ov = image_terms(torch.zeros(1, *targets.shape), targets)
+                cov, ov = image_terms(torch.zeros(1, *targets.shape), targets, cfg.loss.cov_weights)
                 cur = type("B", (), {"total": float(cov.sum()), "cov": cov[0].tolist(), "ov": [0.0] * T})()
         if cur.total < best_any[0]:
             best_any = (cur.total, D.clone())
@@ -472,7 +473,7 @@ def run_srd(D: Dissection, targets: torch.Tensor, cfg: SRDConfig, log_fn=None) -
 
 def _score_empty(D: Dissection, rws: list[Rewrite], targets: torch.Tensor, cfg: SRDConfig):
     """Scoring when there are no pieces yet (only AddPart applies): baseline is the empty arrangement."""
-    cov, ov = image_terms(torch.zeros(1, *targets.shape), targets)
+    cov, ov = image_terms(torch.zeros(1, *targets.shape), targets, cfg.loss.cov_weights)
     base = float((cfg.loss.w_cov * cov).sum())
     gen = _PidGen(10**9)
     vs = []

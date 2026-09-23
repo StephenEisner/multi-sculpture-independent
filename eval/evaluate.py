@@ -13,7 +13,7 @@ from d4descent.objects.arclines import Shape
 from srd_dissect.state import Dissection
 
 from .geometry import local_polygons, shape_polygon
-from .protocol import px_scale, score_arrangement
+from .protocol import px_scale, score_arrangement, surface_scores
 from .validity import full_report, remove_overlaps, world_polys
 
 
@@ -22,7 +22,8 @@ def _scores(local, D, targets):
     for t, tg in enumerate(targets):
         U = shapely.unary_union(list(world_polys(local, D, t).values()))
         s = score_arrangement(U, tg)
-        out.append({"chamfer": s.chamfer, "hausdorff": s.hausdorff, "icp_shift_px": s.icp_shift_px})
+        out.append({"chamfer": s.chamfer, "hausdorff": s.hausdorff, "icp_shift_px": s.icp_shift_px,
+                    **surface_scores(U, tg)})
     return out
 
 

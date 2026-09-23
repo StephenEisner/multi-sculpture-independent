@@ -70,6 +70,7 @@ def main(argv=None):
     ap.add_argument("--k", type=int, default=4)
     ap.add_argument("--init", choices=["partition", "growth", "overlay"], default="partition")
     ap.add_argument("--lr-schedule", choices=["adaptive", "cosine"], default="adaptive")
+    ap.add_argument("--surface-loss", action="store_true", help="surface-first coverage weights")
     ap.add_argument("--mode", choices=["fixed", "free"], default="free",
                     help="fixed: hold k after init; free: split/merge freely, finish at exactly k")
     ap.add_argument("--finish-frac", type=float, default=0.7)
@@ -100,6 +101,10 @@ def main(argv=None):
     cfg.proposal.allow_flip = a.allow_flip
     shapes = TG.fit_pair([get_shape(n) for n in a.pair], lim=cfg.render.lim[1])
     targets = torch.stack([render_target_image(s, cfg.render) for s in shapes])
+    if a.surface_loss:
+        from .loss import surface_weights
+
+        cfg.loss.cov_weights = surface_weights(targets, cfg.render.pixel)
     rng = random.Random(a.seed)
     if a.init == "partition":
         from .geom import simplified
