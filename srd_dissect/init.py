@@ -89,7 +89,7 @@ def _pose_from_affine(M, t) -> Pose:
 
 def overlay_init(shape_a: Shape, shape_b: Shape, targets: torch.Tensor, k: int, cfg: RenderConfig,
                  rng: random.Random, allow_flip: bool = False, n_angles: int = 72, top: int = 4,
-                 min_frac: float = 0.004, tol_frac: float = 0.01) -> Dissection:
+                 min_frac: float = 0.004, tol_frac: float = 0.01, min_core: int = 1) -> Dissection:
     """Lay B over A in (one of the top few) best-overlap rigid placements, cut A along B's outline, and use the pieces:
     the overlap A∩B' is placed exactly in both targets; the leftover parts of A are moved into the uncovered parts
     of B. Then cut/merge to exactly k pieces. Different seeds pick different top placements and cuts."""
@@ -129,19 +129,36 @@ def overlay_init(shape_a: Shape, shape_b: Shape, targets: torch.Tensor, k: int, 
     parts = lambda g: [x for x in getattr(g, "geoms", [g]) if x.geom_type == "Polygon" and x.area > 0]
     core = parts(A.intersection(Bp))
     rest = parts(A.difference(Bp))
-    # merge slivers into the neighbour with the longest shared boundary
+    # merge slivers (< min_frac of the area) into the neighbour with the longest shared boundary, then make sure the
+    # shared core gets at least `min_core` of the k pieces by merging the smallest leftovers away
     polys = [(p, "core") for p in core] + [(p, "rest") for p in rest]
-    changed = True
-    while changed:
-        changed = False
-        polys.sort(key=lambda x: x[0].area)
-        if len(polys) > 1 and polys[0][0].area < min_frac * area:
-            small, _ = polys.pop(0)
-            j = max(range(len(polys)), key=lambda i: small.buffer(1e-6).intersection(polys[i][0].buffer(1e-6)).area)
-            u = polys[j][0].union(small).buffer(1e-9).buffer(-1e-9)
-            if u.geom_type == "Polygon":
-                polys[j] = (u, polys[j][1])
-            changed = True
+
+    def shared(p, q):
+        return p.boundary.intersection(q.buffer(1e-7)).length
+
+    def merge_smallest(pred) -> bool:
+        order = sorted([i for i, (p, kind) in enumerate(polys) if pred(p, kind)], key=lambda i: polys[i][0].area)
+        for i0 in order:
+            small = polys[i0][0]
+            nbrs = sorted([i for i in range(len(polys)) if i != i0], key=lambda i: -shared(small, polys[i][0]))
+            for j in nbrs[:3]:
+                if shared(small, polys[j][0]) <= 0:
+                    break
+                u = polys[j][0].union(small).buffer(1e-4).buffer(-1e-4)  # close hairline contacts
+                if u.geom_type != "Polygon":  # drop zero-area specks left by the union
+                    big = [g for g in getattr(u, "geoms", []) if g.geom_type == "Polygon" and g.area > 1e-6]
+                    u = big[0] if len(big) == 1 else u
+                if u.geom_type == "Polygon":
+                    polys[j] = (u, polys[j][1])
+                    polys.pop(i0)
+                    return True
+        return False
+
+    while merge_smallest(lambda p, kind: p.area < min_frac * area):
+        pass
+    n_core_target = max(min_core, k - sum(kind == "rest" for _, kind in polys))
+    while sum(kind == "rest" for _, kind in polys) > k - n_core_target and merge_smallest(lambda p, kind: kind == "rest"):
+        pass
     # uncovered parts of B (in B's frame), largest first
     inv = [Mi[0, 0], Mi[0, 1], Mi[1, 0], Mi[1, 1], ti[0], ti[1]]
     holes_b = sorted(parts(B.difference(shapely.unary_union([affinity.affine_transform(p, inv)
@@ -169,15 +186,26 @@ def overlay_init(shape_a: Shape, shape_b: Shape, targets: torch.Tensor, k: int, 
         pieces.append(_poly_to_piece(len(pieces), p, [Pose(0, 0, 0, 1), pose_b], tol))
     D = Dissection(pieces, T, len(pieces))
     # exactly k pieces: cut the largest (exact: both halves keep the parent's poses), or merge the smallest pair
+    from .rewrites import _cut_shape
+    from .geom import shape_area_centroid
+
     tries = 0
-    while len(D.pieces) < k and tries < 300:
+    while len(D.pieces) < k and tries < 20:
         tries += 1
         p = max(D.pieces, key=lambda q: q.area_centroid()[0])
         m = len(p.shape.primitives)
-        a_, b_ = rng.sample(range(m), 2)
-        ta, tb = rng.uniform(0.2, 0.8), rng.uniform(0.2, 0.8)
-        if valid_cut(p, a_, ta, b_, tb, 0.02):
-            removed, added = apply_rewrite(D, Rewrite("CutPart", pid=p.pid, args=(a_, ta, b_, tb)))
+        best = None
+        for _ in range(60):  # among valid random chords, take the most even split
+            a_, b_ = rng.sample(range(m), 2)
+            ta, tb = rng.uniform(0.2, 0.8), rng.uniform(0.2, 0.8)
+            if not valid_cut(p, a_, ta, b_, tb, 0.02):
+                continue
+            s1, s2 = _cut_shape(p.shape, a_, ta, b_, tb)
+            r = min(shape_area_centroid(s1)[0], shape_area_centroid(s2)[0])
+            if best is None or r > best[0]:
+                best = (r, (a_, ta, b_, tb))
+        if best is not None:
+            removed, added = apply_rewrite(D, Rewrite("CutPart", pid=p.pid, args=best[1]))
             D = D.replace_pieces(removed, added)
     while len(D.pieces) > k:
         D.pieces.sort(key=lambda q: q.area_centroid()[0])

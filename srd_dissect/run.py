@@ -71,6 +71,9 @@ def main(argv=None):
     ap.add_argument("--init", choices=["partition", "growth", "overlay"], default="partition")
     ap.add_argument("--lr-schedule", choices=["adaptive", "cosine"], default="adaptive")
     ap.add_argument("--surface-loss", action="store_true", help="surface-first coverage weights")
+    ap.add_argument("--overlay-min-core", type=int, default=1, help="overlay init: minimum pieces for the shared core")
+    ap.add_argument("--overlay-min-frac", type=float, default=0.004,
+                    help="overlay init: leftover parts smaller than this fraction of the area are merged away")
     ap.add_argument("--mode", choices=["fixed", "free"], default="free",
                     help="fixed: hold k after init; free: split/merge freely, finish at exactly k")
     ap.add_argument("--finish-frac", type=float, default=0.7)
@@ -113,7 +116,8 @@ def main(argv=None):
     elif a.init == "overlay":
         from .init import overlay_init
 
-        D0 = overlay_init(shapes[0], shapes[1], targets, a.k, cfg.render, rng, allow_flip=a.allow_flip)
+        D0 = overlay_init(shapes[0], shapes[1], targets, a.k, cfg.render, rng, allow_flip=a.allow_flip,
+                          min_frac=a.overlay_min_frac, min_core=a.overlay_min_core)
     else:
         D0 = growth_init(targets, a.k, 0.08, cfg.render, rng)
 
