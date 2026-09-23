@@ -112,3 +112,14 @@ def polygon_prims(points: list[tuple[float, float]]) -> list[Primitive]:
     from d4descent.objects.arclines import PrimitiveHelper
 
     return PrimitiveHelper.create_polygon(points)
+
+
+def simplified(shape: Shape, rel_tol: float = 0.01) -> Shape:
+    """Douglas-Peucker simplified copy of a line-only loop (tolerance relative to sqrt(area)); used to seed the
+    initial partition with few segments, while the target keeps its full detail."""
+    import shapely
+
+    P = sample_boundary(loop_order(shape), 1).double().numpy()
+    poly = shapely.Polygon(P)
+    poly = shapely.geometry.polygon.orient(poly.simplify(rel_tol * poly.area ** 0.5, preserve_topology=True), 1.0)
+    return Shape(polygon_prims([tuple(map(float, p)) for p in list(poly.exterior.coords)[:-1]]))

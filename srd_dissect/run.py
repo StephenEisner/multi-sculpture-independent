@@ -32,6 +32,10 @@ def save_dissection(D, path):
 
 def get_shape(name: str):
     """'square' / 'triangle' / 'disk', or 'mdi:<icon>' for a Material Design Icons stand-in silhouette."""
+    if name.startswith("duncan:"):
+        from .shapes_duncan import duncan_shape
+
+        return duncan_shape(name[7:])
     if name.startswith("mdi:"):
         from .shapes_mdi import mdi_shape
 
@@ -96,7 +100,9 @@ def main(argv=None):
     targets = torch.stack([render_target_image(s, cfg.render) for s in shapes])
     rng = random.Random(a.seed)
     if a.init == "partition":
-        D0 = partition_init(shapes[0], targets, a.k, cfg.render, rng)
+        from .geom import simplified
+
+        D0 = partition_init(simplified(shapes[0]), targets, a.k, cfg.render, rng)
     else:
         D0 = growth_init(targets, a.k, 0.08, cfg.render, rng)
 
