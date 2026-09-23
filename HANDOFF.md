@@ -6,7 +6,7 @@ The spec is in `TASK.md`. Assumptions and deviations are in `DEVIATIONS.md`.
 
 | Milestone | State |
 |---|---|
-| M0 Reproduce SRD | Running on a 14-shape subset (CPU). Results in `m0/m0_results.csv` once finished. |
+| M0 Reproduce SRD | **Done** on a 14-shape subset (CPU). Reproduces the paper's range; see below. Per-shape rows in `m0/m0_results.csv`. |
 | M1–M6 | Not started (per "stop and report after each milestone"). |
 
 ## Setup
@@ -31,7 +31,21 @@ d4descent core files are **not** modified. M0 calls its `scripts/optimize_shc.py
 
 **Run:** flags come verbatim from `runs/_rungen_arclines.py` (AL-F, AdaptiveLR lr 0.5, w_line = w_arc = 1e-5, 64 proposals every 25 steps, 1 local step, stopping patience 25), with `batch_param_count` 1024 (memory only). Subset: seed 0, OneComp {10, 66, 77, 98, 103, 107, 122, 124}, Donut {6, 11, 18}, TwoComp {4, 9, 16}.
 
-**Results:** _pending._
+**Results** (seed 0; 4 single-thread processes in parallel on a 4-core CPU, no GPU):
+
+| Dataset | n | PSNR final | PSNR best | Paper | Median per-shape PSNR (cap 60) | #prims | Paper | Prim. match % | Time/shape |
+|---|---|---|---|---|---|---|---|---|---|
+| OneComp | 8 | 34.2 | 54.8 | 44.3 | 59.1 | 6.0 | 9 | 96 | 1314 s |
+| Donut | 3 | 34.4 | 50.0 | 48.1 | 48.0 | 12.3 | 10 | 83 | 4323 s |
+| TwoComp | 3 | 52.1 | 52.1 | 49.3 | 50.6 | 11.0 | 11 | 86 | 3273 s |
+
+PSNR = 10·log10(1 / mean MSE over the shapes). "Final" is the state `optimize()` returns; "best" is the minimum MSE along the trajectory.
+
+**Verdict: reproduced.** On the best state every dataset meets or beats the paper's PSNR, with primitive counts in the same range. 13 of the 14 shapes end at MSE ≤ 1.6e-5; two are near-exact (≤ 1.6e-11).
+
+**Caveat: late divergence.** Two shapes (OneComp 122, Donut 6) reach a low loss (6.5e-6 and 3.6e-6), then diverge in the last few steps after a rewrite round, to 3e-3 and 1e-3. d4descent's `optimize()` returns the *final* state, not the best, so one such shape dominates the mean-MSE PSNR of its set. Whether the paper's numbers include such cases is unknown. **Consequence for M1:** track and return the best state; after a rewrite, keep the optimizer from taking a jolt from a stale step size.
+
+Runtime is 12–60× slower than the paper's GPU timings, which is expected on one CPU thread at 256² resolution with 64 proposals per round.
 
 ## Findings from reading d4descent (inputs to M1)
 
